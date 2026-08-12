@@ -1,0 +1,59 @@
+{
+  "name": "engcode-backend",
+  "version": "1.0.0",
+  "description": "Backend API for EngCode by Ahmed Hamed Educational Platform",
+  "main": "dist/server.js",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "type-check": "tsc --noEmit",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "prisma db seed",
+    "prisma:studio": "prisma studio",
+    "test:auth": "ts-node src/utils/testAuth.ts",
+    "test:admin": "ts-node src/utils/testAdmin.ts",
+    "test:operations": "ts-node src/utils/testOperations.ts",
+    "test:lessons": "ts-node src/utils/testLessons.ts",
+    "test:quizzes": "ts-node src/utils/testQuizzes.ts",
+    "test:assignments": "ts-node src/utils/testAssignments.ts",
+    "test:dashboard": "ts-node src/utils/testStudentDashboard.ts",
+    "test:parent": "ts-node src/utils/testParentPortal.ts",
+    "test:notifications": "ts-node src/utils/testNotificationsAndAudit.ts",
+    "test:reports": "ts-node src/utils/testReports.ts",
+    "verify:reports": "ts-node src/utils/liveE2EVerificationPhase12.ts"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1106.0",
+    "@aws-sdk/s3-request-presigner": "^3.1106.0",
+    "@prisma/client": "^5.10.2",
+    "@types/pdfkit": "^0.17.6",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.3",
+    "express-rate-limit": "^7.2.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "pdfkit": "^0.19.1",
+    "puppeteer": "^25.6.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.11.24",
+    "prisma": "^5.10.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.3.3"
+  }
+}

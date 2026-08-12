@@ -1,0 +1,749 @@
+// ==========================================
+// ENGCODE ACADEMY - DATABASE SCHEMA (MYSQL 8)
+// ==========================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// ENUMS
+// ==========================================
+
+enum UserRole {
+  ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+enum StudentGrade {
+  FIRST_SECONDARY
+  SECOND_SECONDARY
+  THIRD_SECONDARY
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  SUSPENDED
+  COMPLETED
+  CANCELLED
+}
+
+enum SessionStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum QuestionType {
+  MCQ
+  TRUE_FALSE
+  SHORT_ANSWER
+  CODE
+}
+
+enum QuizAttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  GRADED
+  EXPIRED
+}
+
+enum AssignmentStatus {
+  PENDING
+  SUBMITTED
+  GRADED
+  LATE
+}
+
+enum PaymentStatus {
+  PAID
+  PENDING
+  OVERDUE
+  PARTIAL
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  INSTAPAY
+  BANK_TRANSFER
+  OTHER
+}
+
+enum NotificationType {
+  SYSTEM
+  PAYMENT
+  LESSON
+  QUIZ
+  ASSIGNMENT
+  ANNOUNCEMENT
+  ATTENDANCE
+}
+
+enum AnnouncementTarget {
+  ALL_STUDENTS
+  ALL_PARENTS
+  ALL_TEACHERS
+  COURSE_STUDENTS
+  COURSE_PARENTS
+  SPECIFIC_USERS
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+// ==========================================
+// CORE USER & ROLE ENTITIES
+// ==========================================
+
+model User {
+  id           BigInt   @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  fullName     String   @map("full_name")
+  role         UserRole
+  phone        String?
+  email        String?
+  isActive                Boolean                @default(true) @map("is_active")
+  activationTokenHash     String?                @unique @map("activation_token_hash")
+  activationTokenExpires  DateTime?              @map("activation_token_expires")
+  createdAt               DateTime               @default(now()) @map("created_at")
+  updatedAt               DateTime               @updatedAt @map("updated_at")
+
+  student                  Student?
+  parent                   Parent?
+  teacher                  Teacher?
+  notifications              Notification[]
+  announcements              Announcement[]
+  auditLogs                  AuditLog[]
+  generatedReports           MonthlyReport[]
+  reviewedEnrollmentRequests EnrollmentRequest[] @relation("ReviewedEnrollmentRequests")
+  reviewedBookingRequests    BookingRequest[]    @relation("ReviewedBookingRequests")
+  authSessions               AuthSession[]
+
+  @@map("users")
+}
+
+model Student {
+  id          BigInt       @id @default(autoincrement())
+  userId      BigInt       @unique @map("user_id")
+  parentId    BigInt?      @map("parent_id")
+  grade       StudentGrade
+  schoolName  String?      @map("school_name")
+  dateOfBirth DateTime?    @map("date_of_birth") @db.Date
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  user                 User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent               Parent?                @relation(fields: [parentId], references: [id], onDelete: SetNull)
+  enrollments          Enrollment[]
+  groupMembers         GroupStudent[]
+  attendance           Attendance[]
+  quizAttempts         QuizAttempt[]
+  lessonProgress       StudentLessonProgress[]
+  studentAssignments   StudentAssignment[]
+  certificates         Certificate[]
+  monthlyReports       MonthlyReport[]
+
+  @@map("students")
+}
+
+model Parent {
+  id         BigInt   @id @default(autoincrement())
+  userId     BigInt   @unique @map("user_id")
+  occupation String?
+  notes      String?  @db.Text
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  students Student[]
+
+  @@map("parents")
+}
+
+model Teacher {
+  id             BigInt   @id @default(autoincrement())
+  userId         BigInt   @unique @map("user_id")
+  specialization String?
+  bio            String?  @db.Text
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teacherCourses TeacherCourse[]
+
+  @@map("teachers")
+}
+
+model AcademicYear {
+  id        BigInt   @id @default(autoincrement())
+  name      String   @unique
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  isCurrent Boolean  @default(false) @map("is_current")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  courses     Course[]
+  enrollments Enrollment[]
+
+  @@map("academic_years")
+}
+
+// ==========================================
+// ACADEMIC & COURSE MANAGEMENT
+// ==========================================
+
+model Course {
+  id                BigInt       @id @default(autoincrement())
+  academicYearId    BigInt       @map("academic_year_id")
+  code              String       @unique
+  name              String
+  grade             StudentGrade @default(FIRST_SECONDARY) @map("grade")
+  description       String?      @db.Text
+  defaultMonthlyFee Decimal      @default(0.00) @map("default_monthly_fee") @db.Decimal(10, 2)
+  isActive          Boolean      @default(true) @map("is_active")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  academicYear    AcademicYear    @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  teacherCourses  TeacherCourse[]
+  groups          Group[]
+  lessons         Lesson[]
+  enrollments     Enrollment[]
+  certificates    Certificate[]
+  announcements   Announcement[]
+  bookingRequests BookingRequest[]
+
+  @@map("courses")
+}
+
+model TeacherCourse {
+  id        BigInt   @id @default(autoincrement())
+  teacherId BigInt   @map("teacher_id")
+  courseId  BigInt   @map("course_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, courseId])
+  @@map("teacher_courses")
+}
+
+model Group {
+  id        BigInt   @id @default(autoincrement())
+  courseId  BigInt   @map("course_id")
+  name      String
+  maxCapacity Int    @default(30) @map("max_capacity")
+  schedule  String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  course          Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  groupStudents   GroupStudent[]
+  classSessions   ClassSession[]
+  bookingRequests BookingRequest[]
+
+  @@map("groups")
+}
+
+model GroupStudent {
+  id        BigInt   @id @default(autoincrement())
+  groupId   BigInt   @map("group_id")
+  studentId BigInt   @map("student_id")
+  joinedAt  DateTime @default(now()) @map("joined_at")
+
+  group   Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, studentId])
+  @@map("group_students")
+}
+
+model Enrollment {
+  id             BigInt           @id @default(autoincrement())
+  studentId      BigInt           @map("student_id")
+  courseId       BigInt           @map("course_id")
+  academicYearId BigInt           @map("academic_year_id")
+  monthlyFee     Decimal          @map("monthly_fee") @db.Decimal(10, 2)
+  status         EnrollmentStatus @default(ACTIVE)
+  enrolledAt     DateTime         @default(now()) @map("enrolled_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  student        Student         @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  course         Course          @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  academicYear   AcademicYear    @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  payments       Payment[]
+  monthlyReports MonthlyReport[]
+
+  @@unique([studentId, courseId])
+  @@map("enrollments")
+}
+
+// ==========================================
+// SESSIONS & ATTENDANCE
+// ==========================================
+
+model ClassSession {
+  id          BigInt        @id @default(autoincrement())
+  groupId     BigInt        @map("group_id")
+  lessonId    BigInt?       @map("lesson_id")
+  sessionDate DateTime      @map("session_date")
+  topic       String?
+  notes       String?       @db.Text
+  status      SessionStatus @default(SCHEDULED)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  group      Group        @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  lesson     Lesson?      @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  attendance Attendance[]
+
+  @@map("class_sessions")
+}
+
+model Attendance {
+  id        BigInt           @id @default(autoincrement())
+  sessionId BigInt           @map("session_id")
+  studentId BigInt           @map("student_id")
+  status    AttendanceStatus @default(PRESENT)
+  notes     String?          @db.Text
+  markedAt  DateTime         @default(now()) @map("marked_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  session ClassSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, studentId])
+  @@map("attendance")
+}
+
+// ==========================================
+// CURRICULUM, QUIZZES & ASSIGNMENTS
+// ==========================================
+
+model Lesson {
+  id           BigInt   @id @default(autoincrement())
+  courseId     BigInt   @map("course_id")
+  lessonNumber Int      @map("lesson_number")
+  title        String
+  description  String?  @db.Text
+  content      String?  @db.Text
+  isPublished  Boolean  @default(false) @map("is_published")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  course             Course                  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  videos             LessonVideo[]
+  quizzes            Quiz[]
+  assignments        Assignment[]
+  studentProgress    StudentLessonProgress[]
+  classSessions      ClassSession[]
+
+  @@unique([courseId, lessonNumber])
+  @@map("lessons")
+}
+
+model LessonVideo {
+  id            BigInt   @id @default(autoincrement())
+  lessonId      BigInt   @map("lesson_id")
+  title         String
+  r2StorageKey  String   @map("r2_storage_key")
+  durationSeconds Int    @default(0) @map("duration_seconds")
+  videoOrder    Int      @default(1) @map("video_order")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@map("lesson_videos")
+}
+
+model StudentLessonProgress {
+  id                     BigInt    @id @default(autoincrement())
+  studentId              BigInt    @map("student_id")
+  lessonId               BigInt    @map("lesson_id")
+  isCompleted            Boolean   @default(false) @map("is_completed")
+  watchedDurationSeconds Int       @default(0) @map("watched_duration_seconds")
+  lastWatchedAt          DateTime? @map("last_watched_at")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lesson  Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, lessonId])
+  @@map("student_lesson_progress")
+}
+
+model Quiz {
+  id              BigInt   @id @default(autoincrement())
+  lessonId        BigInt   @map("lesson_id")
+  title           String
+  description     String?  @db.Text
+  durationMinutes Int      @default(30) @map("duration_minutes")
+  passingScore    Float    @default(60.0) @map("passing_score")
+  maxAttempts     Int      @default(1) @map("max_attempts")
+  isPublished     Boolean  @default(false) @map("is_published")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  lesson    Lesson         @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+
+  @@map("quizzes")
+}
+
+model QuizQuestion {
+  id            BigInt       @id @default(autoincrement())
+  quizId        BigInt       @map("quiz_id")
+  questionText  String       @map("question_text") @db.Text
+  type          QuestionType @default(MCQ)
+  points        Float        @default(1.0)
+  imageUrl      String?      @map("image_url") @db.Text
+  questionOrder Int          @default(1) @map("question_order")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  quiz    Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  options QuizOption[]
+  answers QuizAnswer[]
+
+  @@map("quiz_questions")
+}
+
+model QuizOption {
+  id          BigInt       @id @default(autoincrement())
+  questionId  BigInt       @map("question_id")
+  optionText  String       @map("option_text") @db.Text
+  isCorrect   Boolean      @default(false) @map("is_correct")
+  optionOrder Int          @default(1) @map("option_order")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  question QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answers  QuizAnswer[]
+
+  @@map("quiz_options")
+}
+
+model QuizAttempt {
+  id            BigInt            @id @default(autoincrement())
+  quizId        BigInt            @map("quiz_id")
+  studentId     BigInt            @map("student_id")
+  attemptNumber Int               @default(1) @map("attempt_number")
+  startTime     DateTime          @default(now()) @map("start_time")
+  endTime       DateTime?         @map("end_time")
+  score         Float?
+  isPassed      Boolean           @default(false) @map("is_passed")
+  status        QuizAttemptStatus @default(IN_PROGRESS)
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  quiz    Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  answers QuizAnswer[]
+
+  @@map("quiz_attempts")
+}
+
+model QuizAnswer {
+  id               BigInt   @id @default(autoincrement())
+  attemptId        BigInt   @map("attempt_id")
+  questionId       BigInt   @map("question_id")
+  selectedOptionId BigInt?  @map("selected_option_id")
+  answerText       String?  @map("answer_text") @db.Text
+  isCorrect        Boolean  @default(false) @map("is_correct")
+  pointsAwarded    Float    @default(0.0) @map("points_awarded")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  attempt        QuizAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question       QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOption QuizOption?  @relation(fields: [selectedOptionId], references: [id], onDelete: SetNull)
+
+  @@map("quiz_answers")
+}
+
+model Assignment {
+  id          BigInt   @id @default(autoincrement())
+  lessonId    BigInt   @map("lesson_id")
+  title       String
+  description String?  @db.Text
+  dueDate     DateTime @map("due_date")
+  maxScore    Float    @default(100.0) @map("max_score")
+  isPublished Boolean  @default(false) @map("is_published")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  lesson             Lesson              @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  studentAssignments StudentAssignment[]
+
+  @@map("assignments")
+}
+
+model StudentAssignment {
+  id               BigInt           @id @default(autoincrement())
+  assignmentId     BigInt           @map("assignment_id")
+  studentId        BigInt           @map("student_id")
+  submissionText   String?          @map("submission_text") @db.Text
+  fileUrl          String?          @map("file_url")
+  storageKey       String?          @map("storage_key")
+  originalFilename String?          @map("original_filename")
+  fileSizeBytes    BigInt?          @map("file_size_bytes")
+  mimeType         String?          @map("mime_type")
+  status           AssignmentStatus @default(PENDING)
+  score            Float?
+  feedback         String?          @db.Text
+  submittedAt      DateTime?        @map("submitted_at")
+  gradedAt         DateTime?        @map("graded_at")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  student    Student    @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@unique([studentId, assignmentId])
+  @@map("student_assignments")
+}
+
+// ==========================================
+// PAYMENTS, REPORTS, NOTIFICATIONS & AUDIT
+// ==========================================
+
+model Payment {
+  id            BigInt        @id @default(autoincrement())
+  enrollmentId  BigInt        @map("enrollment_id")
+  billingMonth  Int           @map("billing_month")
+  billingYear   Int           @map("billing_year")
+  amount        Decimal       @db.Decimal(10, 2)
+  status        PaymentStatus @default(PENDING)
+  paymentMethod PaymentMethod @default(CASH) @map("payment_method")
+  paidDate      DateTime?     @map("paid_date")
+  notes         String?       @db.Text
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+
+  @@unique([enrollmentId, billingMonth, billingYear])
+  @@map("payments")
+}
+
+enum ReportStatus {
+  GENERATING
+  READY
+  FAILED
+}
+
+model MonthlyReport {
+  id                   BigInt        @id @default(autoincrement())
+  studentId            BigInt        @map("student_id")
+  enrollmentId         BigInt        @map("enrollment_id")
+  reportMonth          Int           @map("report_month")
+  reportYear           Int           @map("report_year")
+  version              Int           @default(1)
+  status               ReportStatus  @default(READY)
+  attendancePercentage Float         @default(0.0) @map("attendance_percentage")
+  attendedSessions     Int           @default(0) @map("attended_sessions")
+  absentSessions       Int           @default(0) @map("absent_sessions")
+  lateSessions         Int           @default(0) @map("late_sessions")
+  quizAverage          Float         @default(0.0) @map("quiz_average")
+  assignmentScoreAvg   Float         @default(0.0) @map("assignment_score_avg")
+  paymentStatus        PaymentStatus @map("payment_status")
+  teacherNotes         String?       @map("teacher_notes") @db.Text
+  pdfUrl               String?       @map("pdf_url")
+  pdfStorageKey        String?       @map("pdf_storage_key")
+  snapshotData         String?       @map("snapshot_data") @db.Text
+  generatedById        BigInt?       @map("generated_by_id")
+  generatedAt          DateTime      @default(now()) @map("generated_at")
+  createdAt            DateTime      @default(now()) @map("created_at")
+  updatedAt            DateTime      @updatedAt @map("updated_at")
+
+  student     Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  enrollment  Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+  generatedBy User?      @relation(fields: [generatedById], references: [id], onDelete: SetNull)
+
+  @@unique([studentId, reportMonth, reportYear, version])
+  @@index([enrollmentId])
+  @@map("monthly_reports")
+}
+
+model Certificate {
+  id              BigInt   @id @default(autoincrement())
+  studentId       BigInt   @map("student_id")
+  courseId        BigInt   @map("course_id")
+  certificateCode String   @unique @map("certificate_code")
+  issueDate       DateTime @default(now()) @map("issue_date")
+  pdfUrl          String?  @map("pdf_url")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  course  Course  @relation(fields: [courseId], references: [id], onDelete: Restrict)
+
+  @@map("certificates")
+}
+
+model Notification {
+  id         BigInt           @id @default(autoincrement())
+  userId     BigInt           @map("user_id")
+  title      String
+  message    String           @db.Text
+  isRead     Boolean          @default(false) @map("is_read")
+  type       NotificationType @default(SYSTEM)
+  link       String?
+  entityType String?          @map("entity_type")
+  entityId   BigInt?          @map("entity_id")
+  refKey     String?          @unique @map("ref_key")
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model Announcement {
+  id             BigInt             @id @default(autoincrement())
+  title          String
+  content        String             @db.Text
+  targetAudience AnnouncementTarget @default(ALL_STUDENTS) @map("target_audience")
+  courseId       BigInt?            @map("course_id")
+  status         AnnouncementStatus @default(DRAFT)
+  createdById    BigInt             @map("created_by_id")
+  publishedAt    DateTime?          @map("published_at")
+  expiresAt      DateTime?          @map("expires_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  createdBy User    @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  course    Course? @relation(fields: [courseId], references: [id], onDelete: SetNull)
+
+  @@map("announcements")
+}
+
+model AuditLog {
+  id          BigInt   @id @default(autoincrement())
+  actorId     BigInt   @map("actor_id")
+  actorRole   UserRole @map("actor_role")
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    BigInt?  @map("entity_id")
+  beforeState String?  @map("before_state") @db.Text
+  afterState  String?  @map("after_state") @db.Text
+  metadata    String?  @db.Text
+  ipAddress   String?  @map("ip_address")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@map("audit_logs")
+}
+
+enum EnrollmentRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum LearningMode {
+  IN_PERSON
+  ONLINE
+}
+
+model EnrollmentRequest {
+  id              BigInt                  @id @default(autoincrement())
+  fullName        String                  @map("full_name")
+  phone           String
+  email           String?
+  grade           StudentGrade
+  schoolName      String?                 @map("school_name")
+  course          String
+  learningMode    LearningMode            @default(IN_PERSON) @map("learning_mode")
+  notes           String?                 @db.Text
+  status          EnrollmentRequestStatus @default(PENDING)
+  rejectionReason String?                 @map("rejection_reason") @db.Text
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+  reviewedAt      DateTime?               @map("reviewed_at")
+  reviewedById    BigInt?                 @map("reviewed_by_id")
+
+  reviewedBy User? @relation("ReviewedEnrollmentRequests", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@map("enrollment_requests")
+}
+
+enum BookingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model BookingRequest {
+  id              BigInt        @id @default(autoincrement())
+  studentName     String        @map("student_name")
+  studentPhone    String        @map("student_phone")
+  parentName      String        @map("parent_name")
+  parentPhone     String        @map("parent_phone")
+  courseId        BigInt        @map("course_id")
+  groupId         BigInt        @map("group_id")
+  grade           StudentGrade  @default(FIRST_SECONDARY)
+  learningMode    LearningMode  @default(IN_PERSON) @map("learning_mode")
+  notes           String?       @db.Text
+  status          BookingStatus @default(PENDING)
+  rejectionReason String?       @map("rejection_reason") @db.Text
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  reviewedAt      DateTime?     @map("reviewed_at")
+  reviewedById    BigInt?       @map("reviewed_by_id")
+
+  course     Course    @relation(fields: [courseId], references: [id], onDelete: Restrict)
+  group      Group     @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  reviewedBy User?     @relation("ReviewedBookingRequests", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@map("booking_requests")
+}
+
+model AuthSession {
+  id         BigInt    @id @default(autoincrement())
+  userId     BigInt    @map("user_id")
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  revokedAt  DateTime? @map("revoked_at")
+  lastUsedAt DateTime  @default(now()) @map("last_used_at")
+  ipAddress  String?   @map("ip_address")
+  userAgent  String?   @map("user_agent")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
