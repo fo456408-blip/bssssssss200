@@ -56,11 +56,23 @@ export class R2Service {
    * Generates a short-lived presigned GET URL for accessing private objects in R2
    */
   static async generateDownloadPresignedUrl(key: string, expiresInSeconds: number = 900): Promise<string> {
+    let cleanKey = key;
+    if (cleanKey.includes('?')) {
+      cleanKey = cleanKey.split('?')[0];
+    }
+    if (cleanKey.startsWith('http://') || cleanKey.startsWith('https://')) {
+      try {
+        const urlObj = new URL(cleanKey);
+        cleanKey = urlObj.pathname.replace(/^\//, '');
+      } catch (e) {}
+    }
+    cleanKey = cleanKey.replace(/^\//, '');
+
     if (isR2Configured && s3Client && !R2_ACCOUNT_ID.startsWith('dev_')) {
       try {
         const command = new GetObjectCommand({
           Bucket: R2_BUCKET_NAME,
-          Key: key,
+          Key: cleanKey,
         });
         return await getSignedUrl(s3Client, command, { expiresIn: expiresInSeconds });
       } catch (err) {
@@ -70,6 +82,6 @@ export class R2Service {
 
     // Dev Fallback Simulation (Secure Signed URL Simulation)
     const expiresAt = Date.now() + expiresInSeconds * 1000;
-    return `${R2_PUBLIC_URL}/${key}?expires=${expiresAt}&signature=simulated_presigned_signature`;
+    return `${R2_PUBLIC_URL}/${cleanKey}?expires=${expiresAt}&signature=simulated_presigned_signature`;
   }
 }

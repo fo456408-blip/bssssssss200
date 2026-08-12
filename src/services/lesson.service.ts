@@ -123,8 +123,20 @@ export class LessonService {
     const lesson = await prisma.lesson.findUnique({ where: { id: BigInt(lessonId) } });
     if (!lesson) throw ApiError.notFound('الدرس غير موجود');
 
+    // Clean key: strip query string or presigned parameters if passed
+    let cleanStorageKey = data.storageKey;
+    if (cleanStorageKey.includes('?')) {
+      cleanStorageKey = cleanStorageKey.split('?')[0];
+    }
+    if (cleanStorageKey.startsWith('http://') || cleanStorageKey.startsWith('https://')) {
+      try {
+        const urlObj = new URL(cleanStorageKey);
+        cleanStorageKey = urlObj.pathname.replace(/^\//, '');
+      } catch (e) {}
+    }
+
     // Security check: verify storage key format matches expected lesson structure
-    if (!data.storageKey.startsWith(`courses/${lesson.courseId.toString()}/lessons/${lessonId}/`)) {
+    if (!cleanStorageKey.startsWith(`courses/${lesson.courseId.toString()}/lessons/${lessonId}/`)) {
       throw ApiError.badRequest('مفتاح التخزين غير صالح لـ هذا الدرس');
     }
 
@@ -132,7 +144,7 @@ export class LessonService {
       data: {
         lessonId: BigInt(lessonId),
         title: data.title,
-        r2StorageKey: data.storageKey,
+        r2StorageKey: cleanStorageKey,
         durationSeconds: data.durationSeconds || 0,
       },
     });
