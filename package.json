@@ -14,6 +14,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
+    "seed:admin": "ts-node prisma/seed-admin.ts",
     "prisma:studio": "prisma studio",
     "test:auth": "ts-node src/utils/testAuth.ts",
     "test:admin": "ts-node src/utils/testAdmin.ts",
