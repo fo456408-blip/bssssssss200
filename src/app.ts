@@ -8,6 +8,7 @@ import { globalRateLimiter } from './middleware/rateLimiter.middleware';
 import { ApiError } from './utils/apiError';
 
 const app: Application = express();
+app.set('trust proxy', 1);
 
 // Security HTTP headers
 app.use(helmet());
