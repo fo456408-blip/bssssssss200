@@ -6,6 +6,7 @@ const globalForPrisma = global as unknown as { prisma: PrismaClient };
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
+    datasources: config.databaseUrl ? { db: { url: config.databaseUrl } } : undefined,
     log: config.env === 'development' ? ['query', 'error', 'warn'] : ['error'],
   });
 

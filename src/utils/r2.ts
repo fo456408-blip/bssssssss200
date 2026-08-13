@@ -27,6 +27,36 @@ export class R2Service {
     return this.client;
   }
 
+  static async uploadFileBuffer(buffer: Buffer, key: string, contentType: string = 'application/pdf') {
+    const client = this.getClient();
+    let cleanKey = key.split('?')[0].replace(/^\//, '');
+
+    if (client) {
+      try {
+        const command = new PutObjectCommand({
+          Bucket: config.r2.bucketName,
+          Key: cleanKey,
+          Body: buffer,
+          ContentType: contentType,
+        });
+        await client.send(command);
+        return {
+          fileUrl: `${config.r2.publicUrl || 'https://pub-r2.ahmedhamed.online'}/${cleanKey}`,
+          storageKey: cleanKey,
+          isRealR2: true,
+        };
+      } catch (err) {
+        console.warn('Real R2 upload unavailable, falling back to simulated storage:', err);
+      }
+    }
+
+    return {
+      fileUrl: `${config.r2.publicUrl || 'https://pub-r2.ahmedhamed.online'}/${cleanKey}`,
+      storageKey: cleanKey,
+      isRealR2: false,
+    };
+  }
+
   static async generateUploadPresignedUrl(storageKey: string, contentType: string = 'video/mp4', expiresIn: number = 900) {
     const client = this.getClient();
 

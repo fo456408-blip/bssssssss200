@@ -8,7 +8,7 @@ export const config = {
   port: parseInt(process.env.PORT || '5000', 10),
   apiPrefix: process.env.API_PREFIX || '/api/v1',
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  databaseUrl: process.env.DATABASE_URL || '',
+  databaseUrl: process.env.DATABASE_URL || 'mysql://root:123456@localhost:3306/engcode_db',
   jwt: {
     secret: process.env.JWT_SECRET || 'dev_secret_key',
     expiresIn: process.env.JWT_EXPIRES_IN || '15m',
@@ -19,5 +19,10 @@ export const config = {
     accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
     bucketName: process.env.R2_BUCKET_NAME || 'engcode-videos',
+    publicUrl: process.env.R2_PUBLIC_URL || 'https://pub-r2.ahmedhamed.online',
   },
 };
+
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = config.databaseUrl;
+}

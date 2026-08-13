@@ -97,6 +97,33 @@ export class ReportPDFService {
   }
 
   /**
+   * Helper to locate and convert bundled Cairo Arabic font to base64 Data URI
+   */
+  private static getCairoFontBase64(): string {
+    const possiblePaths = [
+      path.join(__dirname, '../../assets/fonts/Cairo-Regular.ttf'),
+      path.join(__dirname, '../assets/fonts/Cairo-Regular.ttf'),
+      path.join(__dirname, '../../../assets/fonts/Cairo-Regular.ttf'),
+      path.join(process.cwd(), 'assets/fonts/Cairo-Regular.ttf'),
+      path.join(process.cwd(), 'backend/assets/fonts/Cairo-Regular.ttf'),
+      path.join(process.cwd(), 'dist/assets/fonts/Cairo-Regular.ttf'),
+    ];
+
+    for (const fontPath of possiblePaths) {
+      if (fs.existsSync(fontPath)) {
+        try {
+          const fileData = fs.readFileSync(fontPath).toString('base64');
+          return `data:font/ttf;base64,${fileData}`;
+        } catch (e) {
+          console.warn(`Failed to read font file at ${fontPath}:`, e);
+        }
+      }
+    }
+    console.warn('Cairo font file not found in possible paths. Falling back to Google Fonts @import.');
+    return '';
+  }
+
+  /**
    * Generates clean HTML template for the Monthly Report
    */
   private static generateReportHTML(data: MonthlyReportPDFData): string {
@@ -107,6 +134,7 @@ export class ReportPDFService {
     const paymentBadgeBorder = isPaid ? '#A7F3D0' : '#FECACA';
 
     const logoBase64 = this.getRealEngCodeLogoBase64();
+    const cairoFontBase64 = this.getCairoFontBase64();
 
     return `
 <!DOCTYPE html>
@@ -114,7 +142,16 @@ export class ReportPDFService {
 <head>
   <meta charset="UTF-8" />
   <style>
+    ${cairoFontBase64 ? `
+    @font-face {
+      font-family: 'Cairo';
+      font-style: normal;
+      font-weight: 100 900;
+      src: url('${cairoFontBase64}') format('truetype');
+    }
+    ` : `
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap');
+    `}
 
     @page {
       size: A4 portrait;
@@ -754,7 +791,10 @@ export class ReportPDFService {
 
     try {
       const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: 'domcontentloaded' as any });
+      await page.setContent(html, { waitUntil: 'networkidle0' as any });
+
+      // Explicitly wait for embedded/local fonts to finish rendering in DOM
+      await page.evaluate(() => document.fonts.ready);
 
       const pdfBuffer = await page.pdf({
         format: 'A4',
